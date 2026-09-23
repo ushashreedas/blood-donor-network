@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Blood Donor Matching Network</title>
+
+    <link rel="stylesheet"
+          href="style.css">
+
+</head>
+
+<body>
+
+    <header>
+
+        <h1>Blood Donor Matching Network</h1>
+
+        <p>
+            Connecting patients with available blood donors
+        </p>
+
+    </header>
+
+
+    <main>
+
+        <!-- DONOR REGISTRATION -->
+
+        <section class="card">
+
+            <h2>Donor Registration</h2>
+
+            <label>Donor Name</label>
+
+            <input
+                type="text"
+                id="donorName"
+                placeholder="Enter donor name"
+            >
+
+            <label>Blood Group</label>
+
+            <select id="donorBloodGroup">
+
+                <option value="O+">O+</option>
+                <option value="A+">A+</option>
+                <option value="B+">B+</option>
+                <option value="AB+">AB+</option>
+
+                <option value="O-">O-</option>
+                <option value="A-">A-</option>
+                <option value="B-">B-</option>
+                <option value="AB-">AB-</option>
+
+            </select>
+
+            <label>Location</label>
+
+            <input
+                type="text"
+                id="donorLocation"
+                placeholder="Enter city"
+            >
+
+            <label>Availability</label>
+
+            <select id="donorAvailability">
+
+                <option value="true">
+                    Available
+                </option>
+
+                <option value="false">
+                    Not Available
+                </option>
+
+            </select>
+
+            <button onclick="registerDonor()">
+                Register as Donor
+            </button>
+
+            <div id="registrationResult"></div>
+
+        </section>
+
+
+        <!-- EMERGENCY BLOOD REQUEST -->
+
+        <section class="card">
+
+            <h2>Emergency Blood Request</h2>
+
+            <label>Required Blood Group</label>
+
+            <select id="bloodGroup">
+
+                <option value="O+">O+</option>
+                <option value="A+">A+</option>
+                <option value="B+">B+</option>
+                <option value="AB+">AB+</option>
+
+                <option value="O-">O-</option>
+                <option value="A-">A-</option>
+                <option value="B-">B-</option>
+                <option value="AB-">AB-</option>
+
+            </select>
+
+            <label>Hospital</label>
+
+            <input
+                type="text"
+                id="hospital"
+                placeholder="Enter hospital name"
+            >
+
+            <label>Location</label>
+
+            <input
+                type="text"
+                id="requestLocation"
+                placeholder="Enter city"
+            >
+
+            <label>Urgency</label>
+
+            <select id="urgency">
+
+                <option value="Critical">
+                    Critical
+                </option>
+
+                <option value="High">
+                    High
+                </option>
+
+                <option value="Normal">
+                    Normal
+                </option>
+
+            </select>
+
+            <button onclick="findDonors()">
+                Find Matching Donors
+            </button>
+
+        </section>
+
+
+        <!-- MATCHING RESULTS -->
+
+        <section class="card">
+
+            <h2>Matching Results</h2>
+
+            <div id="results">
+
+                <p>
+                    Submit a blood request to find
+                    available donors.
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- REQUEST MANAGEMENT -->
+
+        <section class="card">
+
+            <h2>Request Management</h2>
+
+            <button onclick="loadRequests()">
+                View All Requests
+            </button>
+
+            <div id="requestList">
+
+                <p>
+                    Click "View All Requests" to see
+                    saved blood requests.
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>

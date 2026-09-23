@@ -1,0 +1,58 @@
+[
+    {
+        "id": 1,
+        "name": "Ananya",
+        "bloodGroup": "O+",
+        "location": "Chennai",
+        "available": true
+    },
+    {
+        "id": 2,
+        "name": "Rahul",
+        "bloodGroup": "A+",
+        "location": "Chennai",
+        "available": true
+    },
+    {
+        "id": 3,
+        "name": "Priya",
+        "bloodGroup": "B+",
+        "location": "Chennai",
+        "available": false
+    },
+    {
+        "id": 4,
+        "name": "Kavya",
+        "bloodGroup": "A+",
+        "location": "Chennai",
+        "available": true
+    },
+    {
+        "id": 5,
+        "name": "Hreeti",
+        "bloodGroup": "O+",
+        "location": "Chennai",
+        "available": true
+    },
+    {
+        "id": 6,
+        "name": "Anna",
+        "bloodGroup": "O+",
+        "location": "Chennai",
+        "available": true
+    },
+    {
+        "id": 7,
+        "name": " Kavya",
+        "bloodGroup": "O+",
+        "location": "Chennai",
+        "available": true
+    },
+    {
+        "id": 8,
+        "name": "Ayush",
+        "bloodGroup": "O+",
+        "location": "Kolkata",
+        "available": true
+    }
+]
