@@ -4,7 +4,10 @@ const fs = require("fs");
 const path = require("path");
 
 const app = express();
-const PORT = 3000;
+
+// Use hosting provider's port when deployed,
+// otherwise use port 3000 locally.
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
@@ -52,9 +55,7 @@ function saveRequests(requests) {
 // ------------------------------------
 
 app.get("/api/donors", (req, res) => {
-
     const donors = getDonors();
-
     res.json(donors);
 });
 
@@ -63,11 +64,9 @@ app.get("/api/donors", (req, res) => {
 // ------------------------------------
 
 app.post("/api/donors", (req, res) => {
-
     const { name, bloodGroup, location, available } = req.body;
 
     if (!name || !bloodGroup || !location) {
-
         return res.status(400).json({
             message: "Please provide name, blood group and location."
         });
@@ -84,7 +83,6 @@ app.post("/api/donors", (req, res) => {
     };
 
     donors.push(newDonor);
-
     saveDonors(donors);
 
     res.status(201).json({
@@ -98,9 +96,7 @@ app.post("/api/donors", (req, res) => {
 // ------------------------------------
 
 app.get("/api/match/:bloodGroup", (req, res) => {
-
     const requiredBloodGroup = req.params.bloodGroup;
-
     const donors = getDonors();
 
     const matches = donors.filter(
@@ -121,7 +117,6 @@ app.get("/api/match/:bloodGroup", (req, res) => {
 // ------------------------------------
 
 app.post("/api/requests", (req, res) => {
-
     const {
         bloodGroup,
         hospital,
@@ -130,7 +125,6 @@ app.post("/api/requests", (req, res) => {
     } = req.body;
 
     if (!bloodGroup || !hospital || !urgency || !location) {
-
         return res.status(400).json({
             message:
                 "Please provide blood group, hospital, urgency and location."
@@ -150,7 +144,6 @@ app.post("/api/requests", (req, res) => {
     };
 
     requests.push(newRequest);
-
     saveRequests(requests);
 
     res.status(201).json({
@@ -164,9 +157,7 @@ app.post("/api/requests", (req, res) => {
 // ------------------------------------
 
 app.get("/api/requests", (req, res) => {
-
     const requests = getRequests();
-
     res.json(requests);
 });
 
@@ -175,7 +166,6 @@ app.get("/api/requests", (req, res) => {
 // ------------------------------------
 
 app.put("/api/requests/:id/status", (req, res) => {
-
     const requestId = Number(req.params.id);
     const { status } = req.body;
 
@@ -188,7 +178,6 @@ app.put("/api/requests/:id/status", (req, res) => {
     ];
 
     if (!allowedStatuses.includes(status)) {
-
         return res.status(400).json({
             message: "Invalid request status."
         });
@@ -201,14 +190,12 @@ app.put("/api/requests/:id/status", (req, res) => {
     );
 
     if (!request) {
-
         return res.status(404).json({
             message: "Blood request not found."
         });
     }
 
     request.status = status;
-
     saveRequests(requests);
 
     res.json({
@@ -222,9 +209,7 @@ app.put("/api/requests/:id/status", (req, res) => {
 // ------------------------------------
 
 app.listen(PORT, () => {
-
     console.log(
-        `Blood Donor Matching Network server running on http://localhost:${PORT}`
+        `Blood Donor Matching Network server running on port ${PORT}`
     );
-
 });
