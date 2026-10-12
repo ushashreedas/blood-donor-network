@@ -1,629 +1,324 @@
-// ------------------------------------
-// REGISTER DONOR
-// ------------------------------------
+// ============================================================
+// Blood Donor Matching Network - Frontend JavaScript
+// Handles user interaction and calls the REST API
+// ============================================================
 
-async function registerDonor() {
+const API_URL = '/api';
 
-    const name =
-        document.getElementById("donorName").value;
+// ---------- Helper functions ----------
 
-    const bloodGroup =
-        document.getElementById("donorBloodGroup").value;
+// Prevent HTML injection when showing user-entered text
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-    const location =
-        document.getElementById("donorLocation").value;
+function formatDate(isoString) {
+    return new Date(isoString).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
 
-    const available =
-        document.getElementById("donorAvailability").value === "true";
+function showMessage(elementId, text, type) {
+    const element = document.getElementById(elementId);
+    element.textContent = text;
+    element.className = 'message ' + type;
+}
 
-    const result =
-        document.getElementById("registrationResult");
-
-
-    if (name.trim() === "" || location.trim() === "") {
-
-        result.innerHTML =
-            "<p>Please enter donor name and location.</p>";
-
-        return;
+// Small wrapper around fetch for JSON requests
+async function apiCall(path, method, body) {
+    const options = { method: method, headers: { 'Content-Type': 'application/json' } };
+    if (body) {
+        options.body = JSON.stringify(body);
     }
 
+    const response = await fetch(API_URL + path, options);
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.error || 'Something went wrong.');
+    }
+    return data;
+}
+
+// ============================================================
+// DONOR REGISTRATION
+// ============================================================
+
+async function registerDonor(event) {
+    event.preventDefault();
+
+    const donor = {
+        name: document.getElementById('donorName').value,
+        bloodGroup: document.getElementById('donorBloodGroup').value,
+        location: document.getElementById('donorLocation').value,
+        availability: document.getElementById('donorAvailability').value
+    };
 
     try {
-
-        const response = await fetch(
-            "/api/donors",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    name,
-                    bloodGroup,
-                    location,
-                    available
-                })
-            }
-        );
-
-
-        const data =
-            await response.json();
-
-
-        if (!response.ok) {
-
-            result.innerHTML =
-                `<p>${data.message}</p>`;
-
-            return;
-        }
-
-
-        result.innerHTML = `
-
-            <div class="success">
-
-                <strong>
-                    Donor registered successfully!
-                </strong>
-
-                <br><br>
-
-                Name:
-                ${data.donor.name}
-
-                <br>
-
-                Blood Group:
-                ${data.donor.bloodGroup}
-
-                <br>
-
-                Location:
-                ${data.donor.location}
-
-                <br>
-
-                Status:
-                ${data.donor.available
-                    ? "Available"
-                    : "Not Available"}
-
-            </div>
-        `;
-
-
-        document.getElementById("donorName").value = "";
-
-        document.getElementById("donorLocation").value = "";
-
-
+        const saved = await apiCall('/donors', 'POST', donor);
+        showMessage('donorMessage', 'Donor registered successfully. ID: ' + saved.id, 'success');
+        document.getElementById('donorForm').reset();
+        loadDonors();
     } catch (error) {
-
-        console.error(error);
-
-        result.innerHTML =
-            "<p>Unable to connect to the server.</p>";
+        showMessage('donorMessage', error.message, 'error');
     }
 }
 
-
-// ------------------------------------
-// CREATE EMERGENCY BLOOD REQUEST
-// ------------------------------------
-
-async function createBloodRequest() {
-
-    const bloodGroup =
-        document.getElementById("bloodGroup").value;
-
-    const hospital =
-        document.getElementById("hospital").value;
-
-    const urgency =
-        document.getElementById("urgency").value;
-
-    const location =
-        document.getElementById("requestLocation").value;
-
-    const results =
-        document.getElementById("results");
-
-
-    if (hospital.trim() === "") {
-
-        results.innerHTML =
-            "<p>Please enter the hospital name.</p>";
-
-        return;
-    }
-
-
-    if (location.trim() === "") {
-
-        results.innerHTML =
-            "<p>Please enter the location.</p>";
-
-        return;
-    }
-
-
-    results.innerHTML =
-        "<p>Creating emergency blood request...</p>";
-
+async function loadDonors() {
+    const container = document.getElementById('donorList');
 
     try {
+        const donors = await apiCall('/donors', 'GET');
 
-        // CREATE REQUEST
-
-        const requestResponse =
-            await fetch(
-                "/api/requests",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        bloodGroup,
-                        hospital,
-                        urgency,
-                        location
-                    })
-                }
-            );
-
-
-        const requestData =
-            await requestResponse.json();
-
-
-        if (!requestResponse.ok) {
-
-            results.innerHTML =
-                `<p>${requestData.message}</p>`;
-
+        if (donors.length === 0) {
+            container.innerHTML = '<p class="placeholder">No donors registered yet.</p>';
             return;
         }
 
+        let html = '';
+        donors.forEach(donor => {
+            const badgeClass = donor.availability === 'Available' ? 'Available' : 'NotAvailable';
+            const toggleTo = donor.availability === 'Available' ? 'Not Available' : 'Available';
 
-        // FIND MATCHING DONORS
-
-        const matchResponse =
-            await fetch(
-                `/api/match/${bloodGroup}`
-            );
-
-
-        const matchData =
-            await matchResponse.json();
-
-
-        // IF MATCHES EXIST,
-        // REQUEST IS CONSIDERED MATCHED
-
-        let currentStatus =
-            requestData.request.status;
-
-
-        if (matchData.totalMatches > 0) {
-
-            currentStatus = "Matched";
-
-            await updateRequestStatus(
-                requestData.request.id,
-                "Matched"
-            );
-        }
-
-
-        // DISPLAY REQUEST
-
-        results.innerHTML = `
-
-            <div class="success">
-
-                <strong>
-                    Blood request created successfully!
-                </strong>
-
-                <br><br>
-
-                <strong>
-                    Request ID:
-                </strong>
-
-                ${requestData.request.id}
-
-                <br>
-
-                <strong>
-                    Hospital:
-                </strong>
-
-                ${hospital}
-
-                <br>
-
-                <strong>
-                    Blood Group:
-                </strong>
-
-                ${bloodGroup}
-
-                <br>
-
-                <strong>
-                    Urgency:
-                </strong>
-
-                ${urgency}
-
-                <br>
-
-                <strong>
-                    Location:
-                </strong>
-
-                ${location}
-
-                <br>
-
-                <strong>
-                    Status:
-                </strong>
-
-                <span id="currentStatus">
-                    ${currentStatus}
-                </span>
-
-            </div>
-
-            <h3>
-                Matching Donors
-            </h3>
-        `;
-
-
-        // NO MATCHES
-
-        if (matchData.totalMatches === 0) {
-
-            results.innerHTML += `
-
-                <p>
-                    No available matching donors found.
-                </p>
-            `;
-
-            return;
-        }
-
-
-        // DISPLAY MATCH COUNT
-
-        results.innerHTML += `
-
-            <p>
-
-                <strong>
-                    Matching donors found:
-                </strong>
-
-                ${matchData.totalMatches}
-
-            </p>
-        `;
-
-
-        // DISPLAY DONORS
-
-        matchData.matches.forEach(donor => {
-
-            results.innerHTML += `
-
-                <div class="donor">
-
-                    <strong>
-                        ${donor.name}
-                    </strong>
-
-                    <br>
-
-                    Blood Group:
-                    ${donor.bloodGroup}
-
-                    <br>
-
-                    Location:
-                    ${donor.location}
-
-                    <br>
-
-                    Status:
-                    Available
-
+            html += `
+                <div class="item">
+                    <div class="item-title">
+                        ${escapeHtml(donor.name)}
+                        <span class="badge">${escapeHtml(donor.bloodGroup)}</span>
+                        <span class="badge ${badgeClass}">${escapeHtml(donor.availability)}</span>
+                    </div>
+                    <div>ID: ${escapeHtml(donor.id)} &nbsp;|&nbsp; Location: ${escapeHtml(donor.location)}</div>
+                    <div class="actions">
+                        <button class="secondary" onclick="changeAvailability('${donor.id}', '${toggleTo}')">
+                            Mark ${toggleTo}
+                        </button>
+                    </div>
                 </div>
             `;
         });
-
-
-        // STATUS BUTTONS
-
-        results.innerHTML += `
-
-            <div class="status-buttons">
-
-                <button
-                    onclick="changeStatus(
-                        ${requestData.request.id},
-                        'Alerted'
-                    )"
-                >
-                    Mark Alerted
-                </button>
-
-
-                <button
-                    onclick="changeStatus(
-                        ${requestData.request.id},
-                        'Confirmed'
-                    )"
-                >
-                    Confirm Donor
-                </button>
-
-
-                <button
-                    onclick="changeStatus(
-                        ${requestData.request.id},
-                        'Fulfilled'
-                    )"
-                >
-                    Mark Fulfilled
-                </button>
-
-            </div>
-        `;
-
-
+        container.innerHTML = html;
     } catch (error) {
-
-        console.error(error);
-
-        results.innerHTML =
-            "<p>Unable to connect to the server.</p>";
+        container.innerHTML = '<p class="message error">' + escapeHtml(error.message) + '</p>';
     }
 }
 
-
-// ------------------------------------
-// FIND DONORS
-// ------------------------------------
-
-function findDonors() {
-
-    createBloodRequest();
-
+async function changeAvailability(donorId, availability) {
+    try {
+        await apiCall('/donors/' + donorId + '/availability', 'PUT', { availability: availability });
+        loadDonors();
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
+// ============================================================
+// EMERGENCY REQUEST + MATCHING
+// ============================================================
 
-// ------------------------------------
-// UPDATE REQUEST STATUS
-// ------------------------------------
+async function submitRequest(event) {
+    event.preventDefault();
 
-async function updateRequestStatus(
-    requestId,
-    status
-) {
+    const request = {
+        bloodGroup: document.getElementById('requestBloodGroup').value,
+        hospital: document.getElementById('hospital').value,
+        location: document.getElementById('requestLocation').value,
+        urgency: document.getElementById('urgency').value
+    };
 
     try {
+        const result = await apiCall('/requests', 'POST', request);
+        showMessage('requestMessage', 'Request ' + result.request.id + ' posted. Status: ' + result.request.status, 'success');
+        displayMatches(result.request, result.matches);
+        document.getElementById('requestForm').reset();
 
-        const response =
-            await fetch(
-                `/api/requests/${requestId}/status`,
-                {
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        status
-                    })
-                }
-            );
-
-
-        const data =
-            await response.json();
-
-
-        return data;
-
-
+        // Refresh the request list if it is already open
+        if (document.getElementById('requestList').querySelector('.item')) {
+            loadRequests();
+        }
     } catch (error) {
-
-        console.error(error);
-
-        return null;
+        showMessage('requestMessage', error.message, 'error');
     }
 }
 
+function displayMatches(request, matches) {
+    const container = document.getElementById('results');
 
-// ------------------------------------
-// CHANGE REQUEST STATUS
-// ------------------------------------
+    let html = `
+        <p><strong>Request ${escapeHtml(request.id)}</strong> &mdash;
+        ${escapeHtml(request.bloodGroup)} needed at ${escapeHtml(request.hospital)},
+        ${escapeHtml(request.location)}
+        <span class="badge ${request.status}">${request.status}</span></p>
+    `;
 
-async function changeStatus(
-    requestId,
-    status
-) {
-
-    const data =
-        await updateRequestStatus(
-            requestId,
-            status
-        );
-
-
-    if (!data) {
-
-        alert(
-            "Unable to update request status."
-        );
-
-        return;
+    if (matches.length === 0) {
+        html += '<p class="placeholder">No available donors found for this blood group right now. The request stays Posted.</p>';
+    } else {
+        html += '<p class="placeholder">' + matches.length + ' matching donor(s) found:</p>';
+        matches.forEach(donor => {
+            html += `
+                <div class="item">
+                    <div class="item-title">
+                        ${escapeHtml(donor.name)}
+                        <span class="badge">${escapeHtml(donor.bloodGroup)}</span>
+                        <span class="badge Available">Available</span>
+                    </div>
+                    <div>Location: ${escapeHtml(donor.location)} &nbsp;|&nbsp; Donor ID: ${escapeHtml(donor.id)}</div>
+                </div>
+            `;
+        });
     }
 
-
-    const statusElement =
-        document.getElementById(
-            "currentStatus"
-        );
-
-
-    if (statusElement) {
-
-        statusElement.textContent =
-            status;
-    }
-
-
-    alert(
-        `Request #${requestId} status updated to ${status}`
-    );
-
-
-    // Refresh request list if visible
-
-    loadRequests();
+    container.innerHTML = html;
 }
 
-
-// ------------------------------------
-// LOAD ALL REQUESTS
-// ------------------------------------
+// ============================================================
+// REQUEST MANAGEMENT (lifecycle tracking)
+// Posted -> Matched -> Alerted -> Confirmed -> Fulfilled
+// ============================================================
 
 async function loadRequests() {
-
-    const requestList =
-        document.getElementById("requestList");
-
-
-    requestList.innerHTML =
-        "<p>Loading requests...</p>";
-
+    const container = document.getElementById('requestList');
 
     try {
-
-        const response =
-            await fetch(
-                "/api/requests"
-            );
-
-
-        const requests =
-            await response.json();
-
+        const requests = await apiCall('/requests', 'GET');
 
         if (requests.length === 0) {
-
-            requestList.innerHTML =
-                "<p>No blood requests found.</p>";
-
+            container.innerHTML = '<p class="placeholder">No blood requests saved yet.</p>';
             return;
         }
 
-
-        requestList.innerHTML = "";
-
-
+        let html = '';
         requests.forEach(request => {
-
-            requestList.innerHTML += `
-
-                <div class="donor">
-
-                    <strong>
-                        Request #${request.id}
-                    </strong>
-
-                    <br>
-
-                    Blood Group:
-                    ${request.bloodGroup}
-
-                    <br>
-
-                    Hospital:
-                    ${request.hospital}
-
-                    <br>
-
-                    Location:
-                    ${request.location}
-
-                    <br>
-
-                    Urgency:
-                    ${request.urgency}
-
-                    <br>
-
-                    Status:
-                    <strong>
-                        ${request.status}
-                    </strong>
-
-                    <br><br>
-
-                    <button
-                        onclick="changeStatus(
-                            ${request.id},
-                            'Alerted'
-                        )"
-                    >
-                        Alerted
-                    </button>
-
-
-                    <button
-                        onclick="changeStatus(
-                            ${request.id},
-                            'Confirmed'
-                        )"
-                    >
-                        Confirmed
-                    </button>
-
-
-                    <button
-                        onclick="changeStatus(
-                            ${request.id},
-                            'Fulfilled'
-                        )"
-                    >
-                        Fulfilled
-                    </button>
-
+            html += `
+                <div class="item ${request.urgency.toLowerCase()}">
+                    <div class="item-title">
+                        ${escapeHtml(request.id)} &mdash; ${escapeHtml(request.bloodGroup)}
+                        <span class="badge ${request.status}">${request.status}</span>
+                    </div>
+                    <div>Hospital: ${escapeHtml(request.hospital)} &nbsp;|&nbsp; Location: ${escapeHtml(request.location)}</div>
+                    <div>Urgency: <strong>${escapeHtml(request.urgency)}</strong> &nbsp;|&nbsp; Created: ${formatDate(request.createdAt)}</div>
+                    <div class="actions">
+                        ${statusButtons(request)}
+                    </div>
                 </div>
             `;
         });
-
-
+        container.innerHTML = html;
     } catch (error) {
-
-        console.error(error);
-
-        requestList.innerHTML =
-            "<p>Unable to load requests.</p>";
+        container.innerHTML = '<p class="message error">' + escapeHtml(error.message) + '</p>';
     }
 }
+
+// Show only the buttons that make sense for the current status
+function statusButtons(request) {
+    const steps = ['Alerted', 'Confirmed', 'Fulfilled'];
+    const order = ['Posted', 'Matched', 'Alerted', 'Confirmed', 'Fulfilled'];
+    const currentIndex = order.indexOf(request.status);
+
+    let buttons = '';
+    steps.forEach(step => {
+        if (order.indexOf(step) > currentIndex) {
+            buttons += `
+                <button class="secondary" onclick="changeStatus('${request.id}', '${step}')">
+                    ${step}
+                </button>
+            `;
+        }
+    });
+
+    return buttons || '<em>Request completed</em>';
+}
+
+async function changeStatus(id, status) {
+    try {
+        await apiCall('/requests/' + id + '/status', 'PUT', { status: status });
+        loadRequests();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+
+document.getElementById('donorForm').addEventListener('submit', registerDonor);
+document.getElementById('requestForm').addEventListener('submit', submitRequest);
+document.getElementById('viewRequestsBtn').addEventListener('click', loadRequests);
+document.getElementById('viewDonorsBtn').addEventListener('click', loadDonors);
+
+// ============================================================
+// HERO: "Find a donor now" card
+// ============================================================
+
+let selectedGroup = '';
+
+// Choose a blood group button
+document.getElementById('bgGrid').addEventListener('click', function (event) {
+    const button = event.target.closest('button');
+    if (!button) return;
+
+    document.querySelectorAll('#bgGrid button').forEach(b => b.classList.remove('selected'));
+    button.classList.add('selected');
+    selectedGroup = button.dataset.group;
+});
+
+// Search available donors by blood group (and city, if entered)
+async function searchDonors() {
+    if (!selectedGroup) {
+        showMessage('searchMessage', 'Please choose a blood group first.', 'error');
+        return;
+    }
+
+    const city = document.getElementById('searchCity').value.trim().toLowerCase();
+
+    try {
+        const donors = await apiCall('/donors', 'GET');
+
+        const matches = donors.filter(donor =>
+            donor.bloodGroup === selectedGroup &&
+            donor.availability === 'Available' &&
+            (city === '' || donor.location.toLowerCase().includes(city))
+        );
+
+        showMessage('searchMessage', matches.length + ' donor(s) found.', 'success');
+        displaySearchResults(matches, selectedGroup, city);
+        document.getElementById('matching').scrollIntoView();
+    } catch (error) {
+        showMessage('searchMessage', error.message, 'error');
+    }
+}
+
+function displaySearchResults(matches, bloodGroup, city) {
+    const container = document.getElementById('results');
+
+    let html = '<p><strong>Search:</strong> ' + escapeHtml(bloodGroup) +
+        (city ? ' in ' + escapeHtml(city) : '') + '</p>';
+
+    if (matches.length === 0) {
+        html += '<p class="placeholder">No available donors found. Try another blood group or city, or submit an emergency request.</p>';
+    } else {
+        matches.forEach(donor => {
+            html += `
+                <div class="item">
+                    <div class="item-title">
+                        ${escapeHtml(donor.name)}
+                        <span class="badge">${escapeHtml(donor.bloodGroup)}</span>
+                        <span class="badge Available">Available</span>
+                    </div>
+                    <div>Location: ${escapeHtml(donor.location)} &nbsp;|&nbsp; Donor ID: ${escapeHtml(donor.id)}</div>
+                </div>
+            `;
+        });
+    }
+
+    container.innerHTML = html;
+}
+
+document.getElementById('searchBtn').addEventListener('click', searchDonors);

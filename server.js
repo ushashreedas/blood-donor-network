@@ -1,215 +1,198 @@
-const express = require("express");
-const cors = require("cors");
-const fs = require("fs");
-const path = require("path");
+// ============================================================
+// Blood Donor Matching Network - Backend
+// Node.js + Express REST API with JSON file storage
+// ============================================================
+
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-
-// Use hosting provider's port when deployed,
-// otherwise use port 3000 locally.
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static("public"));
+// ---------- Middleware ----------
+app.use(cors());                                   // allow the frontend to call the API
+app.use(express.json());                           // parse incoming JSON request bodies
+app.use(express.static(path.join(__dirname, 'public')));  // serve index.html, style.css, script.js
 
-// File locations
-const donorsFile = path.join(__dirname, "donors.json");
-const requestsFile = path.join(__dirname, "requests.json");
+// ---------- JSON file storage (fs module) ----------
+const DONORS_FILE = path.join(__dirname, 'donors.json');
+const REQUESTS_FILE = path.join(__dirname, 'requests.json');
 
-// ------------------------------------
-// DONOR DATA FUNCTIONS
-// ------------------------------------
-
-function getDonors() {
-    const data = fs.readFileSync(donorsFile, "utf8");
-    return JSON.parse(data);
+function readData(file) {
+    try {
+        if (!fs.existsSync(file)) {
+            fs.writeFileSync(file, '[]');
+        }
+        const raw = fs.readFileSync(file, 'utf8');
+        return raw.trim() ? JSON.parse(raw) : [];
+    } catch (error) {
+        console.error('Error reading ' + file + ':', error.message);
+        return [];
+    }
 }
 
-function saveDonors(donors) {
-    fs.writeFileSync(
-        donorsFile,
-        JSON.stringify(donors, null, 4)
+function writeData(file, data) {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+// ---------- Validation rules ----------
+const BLOOD_GROUPS = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'];
+const AVAILABILITY = ['Available', 'Not Available'];
+const URGENCY = ['Critical', 'High', 'Normal'];
+
+// Request lifecycle: Posted -> Matched -> Alerted -> Confirmed -> Fulfilled
+const STATUSES = ['Posted', 'Matched', 'Alerted', 'Confirmed', 'Fulfilled'];
+
+function isText(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+
+// ---------- ID generation ----------
+function nextId(list, prefix) {
+    const numbers = list.map(item => parseInt(item.id.slice(1), 10)).filter(n => !isNaN(n));
+    const next = numbers.length ? Math.max(...numbers) + 1 : 1;
+    return prefix + String(next).padStart(3, '0');
+}
+
+// ---------- Matching logic ----------
+// Required blood group -> check donors.json -> same blood group? -> available? -> return donors
+function findMatchingDonors(bloodGroup) {
+    const donors = readData(DONORS_FILE);
+    return donors.filter(donor =>
+        donor.bloodGroup === bloodGroup && donor.availability === 'Available'
     );
 }
 
-// ------------------------------------
-// REQUEST DATA FUNCTIONS
-// ------------------------------------
+// ============================================================
+// DONOR ROUTES
+// ============================================================
 
-function getRequests() {
-    const data = fs.readFileSync(requestsFile, "utf8");
-    return JSON.parse(data);
-}
-
-function saveRequests(requests) {
-    fs.writeFileSync(
-        requestsFile,
-        JSON.stringify(requests, null, 4)
-    );
-}
-
-// ------------------------------------
-// GET ALL DONORS
-// ------------------------------------
-
-app.get("/api/donors", (req, res) => {
-    const donors = getDonors();
-    res.json(donors);
+// GET all donors
+app.get('/api/donors', (req, res) => {
+    res.json(readData(DONORS_FILE));
 });
 
-// ------------------------------------
-// REGISTER NEW DONOR
-// ------------------------------------
+// POST register a new donor
+app.post('/api/donors', (req, res) => {
+    const { name, bloodGroup, location, availability } = req.body;
 
-app.post("/api/donors", (req, res) => {
-    const { name, bloodGroup, location, available } = req.body;
-
-    if (!name || !bloodGroup || !location) {
-        return res.status(400).json({
-            message: "Please provide name, blood group and location."
-        });
+    if (!isText(name) || !isText(location)) {
+        return res.status(400).json({ error: 'Name and location are required.' });
+    }
+    if (!BLOOD_GROUPS.includes(bloodGroup)) {
+        return res.status(400).json({ error: 'Invalid blood group.' });
+    }
+    if (!AVAILABILITY.includes(availability)) {
+        return res.status(400).json({ error: 'Availability must be Available or Not Available.' });
     }
 
-    const donors = getDonors();
-
-    const newDonor = {
-        id: donors.length + 1,
-        name: name,
-        bloodGroup: bloodGroup,
-        location: location,
-        available: available === true
+    const donors = readData(DONORS_FILE);
+    const donor = {
+        id: nextId(donors, 'D'),
+        name: name.trim(),
+        bloodGroup,
+        location: location.trim(),
+        availability,
+        registeredAt: new Date().toISOString()
     };
 
-    donors.push(newDonor);
-    saveDonors(donors);
-
-    res.status(201).json({
-        message: "Donor registered successfully",
-        donor: newDonor
-    });
+    donors.push(donor);
+    writeData(DONORS_FILE, donors);
+    res.status(201).json(donor);
 });
 
-// ------------------------------------
-// FIND MATCHING DONORS
-// ------------------------------------
-
-app.get("/api/match/:bloodGroup", (req, res) => {
-    const requiredBloodGroup = req.params.bloodGroup;
-    const donors = getDonors();
-
-    const matches = donors.filter(
-        donor =>
-            donor.bloodGroup === requiredBloodGroup &&
-            donor.available === true
-    );
-
-    res.json({
-        requiredBloodGroup: requiredBloodGroup,
-        totalMatches: matches.length,
-        matches: matches
-    });
-});
-
-// ------------------------------------
-// CREATE BLOOD REQUEST
-// ------------------------------------
-
-app.post("/api/requests", (req, res) => {
-    const {
-        bloodGroup,
-        hospital,
-        urgency,
-        location
-    } = req.body;
-
-    if (!bloodGroup || !hospital || !urgency || !location) {
-        return res.status(400).json({
-            message:
-                "Please provide blood group, hospital, urgency and location."
-        });
+// PUT update a donor's availability
+app.put('/api/donors/:id/availability', (req, res) => {
+    const { availability } = req.body;
+    if (!AVAILABILITY.includes(availability)) {
+        return res.status(400).json({ error: 'Invalid availability value.' });
     }
 
-    const requests = getRequests();
+    const donors = readData(DONORS_FILE);
+    const donor = donors.find(d => d.id === req.params.id);
+    if (!donor) {
+        return res.status(404).json({ error: 'Donor not found.' });
+    }
 
-    const newRequest = {
-        id: requests.length + 1,
-        bloodGroup: bloodGroup,
-        hospital: hospital,
-        urgency: urgency,
-        location: location,
-        status: "Posted",
+    donor.availability = availability;
+    writeData(DONORS_FILE, donors);
+    res.json(donor);
+});
+
+// ============================================================
+// BLOOD REQUEST ROUTES
+// ============================================================
+
+// GET all requests (newest first)
+app.get('/api/requests', (req, res) => {
+    const requests = readData(REQUESTS_FILE);
+    res.json(requests.slice().reverse());
+});
+
+// POST create an emergency request and return matching donors
+app.post('/api/requests', (req, res) => {
+    const { bloodGroup, hospital, location, urgency } = req.body;
+
+    if (!BLOOD_GROUPS.includes(bloodGroup)) {
+        return res.status(400).json({ error: 'Invalid blood group.' });
+    }
+    if (!isText(hospital) || !isText(location)) {
+        return res.status(400).json({ error: 'Hospital and location are required.' });
+    }
+    if (!URGENCY.includes(urgency)) {
+        return res.status(400).json({ error: 'Urgency must be Critical, High or Normal.' });
+    }
+
+    const matches = findMatchingDonors(bloodGroup);
+
+    const requests = readData(REQUESTS_FILE);
+    const request = {
+        id: nextId(requests, 'R'),
+        bloodGroup,
+        hospital: hospital.trim(),
+        location: location.trim(),
+        urgency,
+        status: matches.length > 0 ? 'Matched' : 'Posted',
         createdAt: new Date().toISOString()
     };
 
-    requests.push(newRequest);
-    saveRequests(requests);
+    requests.push(request);
+    writeData(REQUESTS_FILE, requests);
 
-    res.status(201).json({
-        message: "Blood request created successfully",
-        request: newRequest
-    });
+    res.status(201).json({ request, matches });
 });
 
-// ------------------------------------
-// GET ALL BLOOD REQUESTS
-// ------------------------------------
-
-app.get("/api/requests", (req, res) => {
-    const requests = getRequests();
-    res.json(requests);
+// GET matching donors for an existing request
+app.get('/api/requests/:id/matches', (req, res) => {
+    const requests = readData(REQUESTS_FILE);
+    const request = requests.find(r => r.id === req.params.id);
+    if (!request) {
+        return res.status(404).json({ error: 'Request not found.' });
+    }
+    res.json(findMatchingDonors(request.bloodGroup));
 });
 
-// ------------------------------------
-// UPDATE REQUEST STATUS
-// ------------------------------------
-
-app.put("/api/requests/:id/status", (req, res) => {
-    const requestId = Number(req.params.id);
+// PUT update request status (request lifecycle)
+app.put('/api/requests/:id/status', (req, res) => {
     const { status } = req.body;
-
-    const allowedStatuses = [
-        "Posted",
-        "Matched",
-        "Alerted",
-        "Confirmed",
-        "Fulfilled"
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-        return res.status(400).json({
-            message: "Invalid request status."
-        });
+    if (!STATUSES.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status.' });
     }
 
-    const requests = getRequests();
-
-    const request = requests.find(
-        item => item.id === requestId
-    );
-
+    const requests = readData(REQUESTS_FILE);
+    const request = requests.find(r => r.id === req.params.id);
     if (!request) {
-        return res.status(404).json({
-            message: "Blood request not found."
-        });
+        return res.status(404).json({ error: 'Request not found.' });
     }
 
     request.status = status;
-    saveRequests(requests);
-
-    res.json({
-        message: "Request status updated successfully",
-        request: request
-    });
+    writeData(REQUESTS_FILE, requests);
+    res.json(request);
 });
 
-// ------------------------------------
-// START SERVER
-// ------------------------------------
-
+// ---------- Start server ----------
 app.listen(PORT, () => {
-    console.log(
-        `Blood Donor Matching Network server running on port ${PORT}`
-    );
+    console.log('Blood Donor Network running on http://localhost:' + PORT);
 });
